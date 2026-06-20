@@ -1,44 +1,33 @@
 /**
- * TemThang API wrapper
- * ส่ง LINE access_token ทุก request — ห้ามส่ง line_user_id เอง (server verify ผ่าน LINE API)
+ * TemThang API wrapper — ส่ง id_token/access_token ผ่าน POST เท่านั้น
  */
 const TemThangApi = (() => {
-  function getAccessToken() {
+  function appendAuth_(params) {
     if (typeof liff === "undefined" || !liff.isLoggedIn()) {
-      throw new Error("Unauthorized");
+      throw new Error("กรุณาเปิดจาก LINE");
     }
-    const token = liff.getAccessToken();
-    if (!token) throw new Error("Unauthorized");
-    return token;
+
+    const accessToken = liff.getAccessToken();
+    const idToken = liff.getIDToken();
+
+    if (accessToken) {
+      params.set("access_token", accessToken);
+      return;
+    }
+    if (idToken) {
+      params.set("id_token", idToken);
+      return;
+    }
+
+    throw new Error("กรุณาเพิ่ม scope openid ใน LIFF App (LINE Developers Console)");
   }
 
-  async function parseResponse(res) {
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || "เกิดข้อผิดพลาด");
-    return data.data;
-  }
-
-  async function request(action, params = {}) {
-    const url = new URL(TEMTHANG_CONFIG.GAS_ENDPOINT);
-    url.searchParams.set("action", action);
-    url.searchParams.set("access_token", getAccessToken());
-
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
-      }
-    });
-
-    const res = await fetch(url.toString(), { method: "GET" });
-    return parseResponse(res);
-  }
-
-  async function post(action, body = {}) {
+  async function call(action, data = {}) {
     const params = new URLSearchParams();
     params.set("action", action);
-    params.set("access_token", getAccessToken());
+    appendAuth_(params);
 
-    Object.entries(body).forEach(([key, value]) => {
+    Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
         params.set(key, String(value));
       }
@@ -49,18 +38,20 @@ const TemThangApi = (() => {
       body: params,
     });
 
-    return parseResponse(res);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || "เกิดข้อผิดพลาด");
+    return json.data;
   }
 
   return {
-    getProfile: () => request("getProfile"),
-    getVehicles: () => request("getVehicles"),
-    getFuelTypes: () => request("getFuelTypes"),
-    getFuelPrices: () => request("getFuelPrices"),
-    getLogs: (vehicleId) => request("getLogs", { vehicle_id: vehicleId }),
-    getDashboard: (vehicleId) => request("getDashboard", { vehicle_id: vehicleId }),
-    saveLog: (payload) => post("saveLog", payload),
-    saveVehicle: (payload) => post("saveVehicle", payload),
-    deleteVehicle: (vehicleId) => post("deleteVehicle", { vehicle_id: vehicleId }),
+    getProfile: () => call("getProfile"),
+    getVehicles: () => call("getVehicles"),
+    getFuelTypes: () => call("getFuelTypes"),
+    getFuelPrices: () => call("getFuelPrices"),
+    getLogs: (vehicleId) => call("getLogs", { vehicle_id: vehicleId }),
+    getDashboard: (vehicleId) => call("getDashboard", { vehicle_id: vehicleId }),
+    saveLog: (payload) => call("saveLog", payload),
+    saveVehicle: (payload) => call("saveVehicle", payload),
+    deleteVehicle: (vehicleId) => call("deleteVehicle", { vehicle_id: vehicleId }),
   };
 })();

@@ -10,12 +10,19 @@ const TemThangLiff = (() => {
     await liff.init({ liffId });
 
     if (!liff.isLoggedIn()) {
-      liff.login();
+      liff.login({ redirectUri: window.location.href });
       return null;
     }
 
     const profile = await liff.getProfile();
     TemThangApi.setLineUserId(profile.userId);
+
+    try {
+      await TemThangApi.getProfile();
+    } catch (err) {
+      throw new Error(`เชื่อมต่อ API ไม่ได้: ${err.message}`);
+    }
+
     return profile;
   }
 

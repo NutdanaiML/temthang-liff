@@ -44,26 +44,32 @@
     </form>
   </main>
 
-  <script src="../shared/config.js?v=3"></script>
-  <script src="../shared/api.js?v=3"></script>
-  <script src="../shared/validate.js?v=3"></script>
-  <script src="../shared/ui.js?v=3"></script>
-  <script src="../shared/liff.js?v=3"></script>
+  <script src="../shared/config.js?v=4"></script>
+  <script src="../shared/api.js?v=4"></script>
+  <script src="../shared/validate.js?v=4"></script>
+  <script src="../shared/ui.js?v=4"></script>
+  <script src="../shared/liff.js?v=4"></script>
   <script>
     let fuelTypes = [];
 
     async function boot() {
       try {
-        TemThangUI.showLoading();
+        TemThangUI.showLoading("กำลังเข้าสู่ระบบ...");
         const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.vehicles);
         if (!profile) {
           document.getElementById("user-name").textContent = "กำลังเข้าสู่ระบบ...";
           return;
         }
         document.getElementById("user-name").textContent = profile.displayName;
-        await TemThangApi.getProfile();
-        await loadFuelTypes();
-        await renderVehicles();
+        TemThangUI.hideLoading();
+
+        TemThangUI.showLoading("กำลังโหลดข้อมูล...");
+        const [types, vehicles] = await Promise.all([
+          TemThangApi.getFuelTypes(),
+          TemThangApi.getVehicles(),
+        ]);
+        populateFuelTypes(types);
+        renderVehicles(vehicles);
       } catch (e) {
         document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";
         TemThangUI.showFatal(e.message);
@@ -72,10 +78,10 @@
       }
     }
 
-    async function loadFuelTypes() {
-      fuelTypes = await TemThangApi.getFuelTypes();
+    function populateFuelTypes(types) {
+      fuelTypes = types;
       const select = document.getElementById("fuel_type");
-      fuelTypes.forEach((ft) => {
+      types.forEach((ft) => {
         const opt = document.createElement("option");
         opt.value = ft.code;
         opt.textContent = ft.name_th;
@@ -83,8 +89,11 @@
       });
     }
 
-    async function renderVehicles() {
-      const vehicles = await TemThangApi.getVehicles();
+    async function loadFuelTypes() {
+      populateFuelTypes(await TemThangApi.getFuelTypes());
+    }
+
+    function renderVehicles(vehicles) {
       const container = document.getElementById("vehicle-list");
 
       if (!vehicles.length) {
@@ -109,7 +118,7 @@
         TemThangUI.showLoading("กำลังลบ...");
         await TemThangApi.deleteVehicle(vehicleId);
         TemThangUI.showSuccess("ลบสำเร็จ");
-        await renderVehicles();
+        renderVehicles(await TemThangApi.getVehicles());
       } catch (e) {
         TemThangUI.showError(e.message);
       } finally {
@@ -137,7 +146,7 @@
       await TemThangApi.saveVehicle(payload);
       TemThangUI.showSuccess("เพิ่มรถสำเร็จ ✅");
       document.getElementById("vehicle-form").reset();
-      await renderVehicles();
+      renderVehicles(await TemThangApi.getVehicles());
     });
 
     boot();

@@ -56,26 +56,32 @@
     </div>
   </main>
 
-  <script src="../shared/config.js?v=3"></script>
-  <script src="../shared/api.js?v=3"></script>
-  <script src="../shared/ui.js?v=3"></script>
-  <script src="../shared/liff.js?v=3"></script>
+  <script src="../shared/config.js?v=4"></script>
+  <script src="../shared/api.js?v=4"></script>
+  <script src="../shared/ui.js?v=4"></script>
+  <script src="../shared/liff.js?v=4"></script>
   <script>
     let barChart = null;
     let lineChart = null;
 
     async function boot() {
       try {
-        TemThangUI.showLoading();
+        TemThangUI.showLoading("กำลังเข้าสู่ระบบ...");
         const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.dashboard);
         if (!profile) {
           document.getElementById("user-name").textContent = "กำลังเข้าสู่ระบบ...";
           return;
         }
         document.getElementById("user-name").textContent = profile.displayName;
-        await TemThangApi.getProfile();
-        await loadVehicles();
-        await refreshDashboard();
+        TemThangUI.hideLoading();
+
+        TemThangUI.showLoading("กำลังโหลดรายงาน...");
+        const [vehicles, dashboardData] = await Promise.all([
+          TemThangApi.getVehicles(),
+          TemThangApi.getDashboard(),
+        ]);
+        populateVehicles(vehicles);
+        renderDashboard(dashboardData);
       } catch (e) {
         document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";
         TemThangUI.showFatal(e.message);
@@ -84,8 +90,7 @@
       }
     }
 
-    async function loadVehicles() {
-      const vehicles = await TemThangApi.getVehicles();
+    function populateVehicles(vehicles) {
       const select = document.getElementById("vehicle_id");
       vehicles.forEach((v) => {
         const opt = document.createElement("option");
@@ -93,6 +98,10 @@
         opt.textContent = v.name;
         select.appendChild(opt);
       });
+    }
+
+    async function loadVehicles() {
+      populateVehicles(await TemThangApi.getVehicles());
     }
 
     function renderDashboard(data) {

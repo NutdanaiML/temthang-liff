@@ -3,6 +3,7 @@
  */
 const TemThangApi = (() => {
   const TIMEOUT_MS = 20000;
+  const FUEL_TYPES_CACHE_KEY = "tt_fuel_types_v1";
 
   function appendAuth_(params) {
     if (typeof liff === "undefined" || !liff.isLoggedIn()) {
@@ -68,7 +69,21 @@ const TemThangApi = (() => {
   return {
     getProfile: () => call("getProfile"),
     getVehicles: () => call("getVehicles"),
-    getFuelTypes: () => call("getFuelTypes"),
+    getFuelTypes: async () => {
+      try {
+        const cached = sessionStorage.getItem(FUEL_TYPES_CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        /* ignore cache errors */
+      }
+      const data = await call("getFuelTypes");
+      try {
+        sessionStorage.setItem(FUEL_TYPES_CACHE_KEY, JSON.stringify(data));
+      } catch (err) {
+        /* ignore cache errors */
+      }
+      return data;
+    },
     getFuelPrices: () => call("getFuelPrices"),
     getLogs: (vehicleId) => call("getLogs", { vehicle_id: vehicleId }),
     getDashboard: (vehicleId) => call("getDashboard", { vehicle_id: vehicleId }),

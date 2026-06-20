@@ -68,11 +68,11 @@
     </form>
   </main>
 
-  <script src="../shared/config.js?v=3"></script>
-  <script src="../shared/api.js?v=3"></script>
-  <script src="../shared/validate.js?v=3"></script>
-  <script src="../shared/ui.js?v=3"></script>
-  <script src="../shared/liff.js?v=3"></script>
+  <script src="../shared/config.js?v=4"></script>
+  <script src="../shared/api.js?v=4"></script>
+  <script src="../shared/validate.js?v=4"></script>
+  <script src="../shared/ui.js?v=4"></script>
+  <script src="../shared/liff.js?v=4"></script>
   <script>
     let vehicles = [];
     let previousOdometer = null;
@@ -80,7 +80,7 @@
 
     async function boot() {
       try {
-        TemThangUI.showLoading();
+        TemThangUI.showLoading("กำลังเข้าสู่ระบบ...");
         const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.refuel);
         if (!profile) {
           document.getElementById("user-name").textContent = "กำลังเข้าสู่ระบบ...";
@@ -88,7 +88,9 @@
         }
         document.getElementById("user-name").textContent = profile.displayName;
         document.getElementById("date").valueAsDate = new Date();
-        await TemThangApi.getProfile();
+        TemThangUI.hideLoading();
+
+        TemThangUI.showLoading("กำลังโหลดรายการรถ...");
         await loadVehicles();
       } catch (e) {
         document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จัดการรถ — น้องเต็มถัง</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <header class="tt-header">
+    <h1>🚗 จัดการโปรไฟล์รถ</h1>
+    <p id="user-name">กำลังโหลด...</p>
+  </header>
+
+  <main class="tt-main">
+    <div id="vehicle-list" class="tt-card">
+      <div class="tt-empty">ยังไม่มีรถ — เพิ่มรถคันแรกด้านล่าง</div>
+    </div>
+
+    <form id="vehicle-form" class="tt-card">
+      <h2 style="font-size:1rem;margin-bottom:1rem">เพิ่มรถใหม่</h2>
+
+      <div class="tt-form-group">
+        <label for="name">ชื่อรถ</label>
+        <input type="text" id="name" name="name" placeholder="เช่น Toyota Corolla" required>
+        <div class="tt-field-error" data-error="name" hidden></div>
+      </div>
+
+      <div class="tt-form-group">
+        <label for="license_plate">ทะเบียนรถ</label>
+        <input type="text" id="license_plate" name="license_plate" placeholder="เช่น กข-1234">
+      </div>
+
+      <div class="tt-form-group">
+        <label for="fuel_type">ชนิดเชื้อเพลิง</label>
+        <select id="fuel_type" name="fuel_type" required>
+          <option value="">-- เลือกชนิด --</option>
+        </select>
+        <div class="tt-field-error" data-error="fuel_type" hidden></div>
+      </div>
+
+      <button type="submit" class="tt-btn tt-btn--primary">เพิ่มรถ</button>
+    </form>
+  </main>
+
+  <script src="../shared/config.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/validate.js"></script>
+  <script src="../shared/ui.js"></script>
+  <script src="../shared/liff.js"></script>
+  <script>
+    let fuelTypes = [];
+
+    async function loadFuelTypes() {
+      fuelTypes = await TemThangApi.getFuelTypes();
+      const select = document.getElementById("fuel_type");
+      fuelTypes.forEach((ft) => {
+        const opt = document.createElement("option");
+        opt.value = ft.code;
+        opt.textContent = ft.name_th;
+        select.appendChild(opt);
+      });
+    }
+
+    async function renderVehicles() {
+      const vehicles = await TemThangApi.getVehicles();
+      const container = document.getElementById("vehicle-list");
+
+      if (!vehicles.length) {
+        container.innerHTML = '<div class="tt-empty">ยังไม่มีรถ — เพิ่มรถคันแรกด้านล่าง</div>';
+        return;
+      }
+
+      container.innerHTML = vehicles.map((v) => `
+        <div class="tt-vehicle-item" data-id="${v.vehicle_id}">
+          <div>
+            <div class="name">${v.name}</div>
+            <div class="plate">${v.license_plate || "ไม่มีทะเบียน"} · ${v.fuel_type}</div>
+          </div>
+          <button class="tt-btn tt-btn--sm tt-btn--danger" onclick="deleteVehicle('${v.vehicle_id}')">ลบ</button>
+        </div>
+      `).join("");
+    }
+
+    async function deleteVehicle(vehicleId) {
+      if (!confirm("ลบรถคันนี้?")) return;
+      try {
+        TemThangUI.showLoading("กำลังลบ...");
+        await TemThangApi.deleteVehicle(vehicleId);
+        TemThangUI.showSuccess("ลบสำเร็จ");
+        await renderVehicles();
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    }
+
+    TemThangUI.bindSubmitButton(document.getElementById("vehicle-form"), async (formData) => {
+      const fuelType = formData.get("fuel_type");
+      const ft = fuelTypes.find((f) => f.code === fuelType);
+
+      const payload = {
+        name: formData.get("name"),
+        license_plate: formData.get("license_plate"),
+        fuel_type: fuelType,
+        fuel_category: ft?.category || "LIQUID",
+      };
+
+      const result = TemThangValidate.validateVehicleForm(payload);
+      if (!result.valid) {
+        TemThangUI.renderFieldErrors(result.errors);
+        return;
+      }
+
+      await TemThangApi.saveVehicle(payload);
+      TemThangUI.showSuccess("เพิ่มรถสำเร็จ ✅");
+      document.getElementById("vehicle-form").reset();
+      await renderVehicles();
+    });
+
+    (async () => {
+      try {
+        TemThangUI.showLoading();
+        const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.vehicles);
+        if (!profile) return;
+        document.getElementById("user-name").textContent = profile.displayName;
+        await loadFuelTypes();
+        await renderVehicles();
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    })();
+  </script>
+</body>
+</html>

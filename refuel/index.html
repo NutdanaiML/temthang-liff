@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>บันทึกเติมน้ำมัน — น้องเต็มถัง</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <header class="tt-header">
+    <h1>⛽ บันทึกเติมน้ำมัน</h1>
+    <p id="user-name">กำลังโหลด...</p>
+  </header>
+
+  <main class="tt-main">
+    <form id="refuel-form" class="tt-card">
+      <div class="tt-form-group">
+        <label for="vehicle_id">เลือกรถ</label>
+        <select id="vehicle_id" name="vehicle_id" required>
+          <option value="">-- เลือกรถ --</option>
+        </select>
+        <div class="tt-field-error" data-error="vehicle_id" hidden></div>
+      </div>
+
+      <div class="tt-form-group">
+        <label for="date">วันที่เติม</label>
+        <input type="date" id="date" name="date" required>
+      </div>
+
+      <div class="tt-form-group">
+        <label for="station">ปั๊ม / สถานีชาร์จ</label>
+        <input type="text" id="station" name="station" placeholder="เช่น ปตท. สุขุมวิท">
+      </div>
+
+      <div class="tt-form-group">
+        <label for="odometer">เลขไมล์ (km)</label>
+        <input type="number" id="odometer" name="odometer" min="0" step="1" required>
+        <div class="tt-field-error" data-error="odometer" hidden></div>
+      </div>
+
+      <div class="tt-form-group">
+        <label for="quantity" id="quantity-label">จำนวน (ลิตร)</label>
+        <input type="number" id="quantity" name="quantity" min="0" step="0.01" required>
+        <div class="tt-field-error" data-error="quantity" hidden></div>
+      </div>
+
+      <div class="tt-form-group">
+        <label for="price_per_unit" id="price-label">ราคาต่อลิตร (บาท)</label>
+        <input type="number" id="price_per_unit" name="price_per_unit" min="0" step="0.01" required>
+        <div class="tt-field-error" data-error="price_per_unit" hidden></div>
+      </div>
+
+      <div class="tt-form-group">
+        <label for="total_price">ยอดรวม (บาท)</label>
+        <input type="number" id="total_price" name="total_price" min="0" step="0.01" required>
+        <div class="tt-field-error" data-error="total_price" hidden></div>
+      </div>
+
+      <div class="tt-form-group">
+        <label class="tt-checkbox">
+          <input type="checkbox" id="is_full_tank" name="is_full_tank" checked>
+          <span id="full-tank-label">เติมเต็มถัง</span>
+        </label>
+      </div>
+
+      <button type="submit" class="tt-btn tt-btn--primary">บันทึก</button>
+    </form>
+  </main>
+
+  <script src="../shared/config.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/validate.js"></script>
+  <script src="../shared/ui.js"></script>
+  <script src="../shared/liff.js"></script>
+  <script>
+    let vehicles = [];
+    let previousOdometer = null;
+    let currentCategory = "LIQUID";
+
+    async function loadVehicles() {
+      vehicles = await TemThangApi.getVehicles();
+      const select = document.getElementById("vehicle_id");
+      select.innerHTML = '<option value="">-- เลือกรถ --</option>';
+      vehicles.forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = v.vehicle_id;
+        opt.textContent = `${v.name} (${v.license_plate || "ไม่มีทะเบียน"})`;
+        opt.dataset.category = v.fuel_category;
+        opt.dataset.odometer = v.odometer_latest || "";
+        select.appendChild(opt);
+      });
+    }
+
+    function updateLabels(category) {
+      currentCategory = category;
+      const units = { LIQUID: "ลิตร", GAS: "กก.", ELECTRIC: "kWh" };
+      const unit = units[category] || "ลิตร";
+      document.getElementById("quantity-label").textContent = `จำนวน (${unit})`;
+      document.getElementById("price-label").textContent = `ราคาต่อ${unit} (บาท)`;
+      document.getElementById("full-tank-label").textContent =
+        category === "ELECTRIC" ? "ชาร์จเต็ม (ถึง target SOC)" : "เติมเต็มถัง";
+    }
+
+    document.getElementById("vehicle_id").addEventListener("change", (e) => {
+      const opt = e.target.selectedOptions[0];
+      if (!opt?.dataset.category) return;
+      updateLabels(opt.dataset.category);
+      previousOdometer = opt.dataset.odometer ? Number(opt.dataset.odometer) : null;
+    });
+
+    document.getElementById("quantity").addEventListener("input", calcTotal);
+    document.getElementById("price_per_unit").addEventListener("input", calcTotal);
+
+    function calcTotal() {
+      const q = Number(document.getElementById("quantity").value);
+      const p = Number(document.getElementById("price_per_unit").value);
+      if (q > 0 && p > 0) {
+        document.getElementById("total_price").value = (q * p).toFixed(2);
+      }
+    }
+
+    TemThangUI.bindSubmitButton(document.getElementById("refuel-form"), async (formData) => {
+      const vehicleId = formData.get("vehicle_id");
+      const vehicle = vehicles.find((v) => v.vehicle_id === vehicleId);
+
+      const payload = {
+        vehicle_id: vehicleId,
+        date: formData.get("date"),
+        station: formData.get("station"),
+        fuel_type: vehicle?.fuel_type,
+        fuel_category: vehicle?.fuel_category || currentCategory,
+        quantity: Number(formData.get("quantity")),
+        price_per_unit: Number(formData.get("price_per_unit")),
+        total_price: Number(formData.get("total_price")),
+        odometer: Number(formData.get("odometer")),
+        is_full_tank: document.getElementById("is_full_tank").checked,
+      };
+
+      const result = TemThangValidate.validateRefuelForm(payload, previousOdometer);
+      if (!result.valid) {
+        TemThangUI.renderFieldErrors(result.errors);
+        return;
+      }
+
+      await TemThangApi.saveLog(payload);
+      TemThangUI.showSuccess("บันทึกสำเร็จ ✅");
+      setTimeout(() => TemThangLiff.close(), 1500);
+    });
+
+    (async () => {
+      try {
+        TemThangUI.showLoading();
+        const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.refuel);
+        if (!profile) return;
+        document.getElementById("user-name").textContent = profile.displayName;
+        document.getElementById("date").valueAsDate = new Date();
+        await loadVehicles();
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    })();
+  </script>
+</body>
+</html>

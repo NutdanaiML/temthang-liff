@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>รายงาน — น้องเต็มถัง</title>
+  <link rel="stylesheet" href="../shared/styles.css">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="tt-header">
+    <h1>📊 รายงานสรุป</h1>
+    <p id="user-name">กำลังโหลด...</p>
+  </header>
+
+  <main class="tt-main">
+    <div class="tt-card">
+      <div class="tt-form-group">
+        <label for="vehicle_id">เลือกรถ</label>
+        <select id="vehicle_id">
+          <option value="">-- ทุกคัน --</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tt-card">
+      <div class="tt-scorecard" id="scorecards">
+        <div class="tt-scorecard-item">
+          <div class="value" id="total-spend">-</div>
+          <div class="label">ยอดรวมทั้งหมด (บาท)</div>
+        </div>
+        <div class="tt-scorecard-item">
+          <div class="value" id="avg-monthly">-</div>
+          <div class="label">เฉลี่ย/เดือน (บาท)</div>
+        </div>
+        <div class="tt-scorecard-item">
+          <div class="value" id="avg-efficiency">-</div>
+          <div class="label">อัตราสิ้นเปลืองเฉลี่ย</div>
+        </div>
+        <div class="tt-scorecard-item">
+          <div class="value" id="total-logs">-</div>
+          <div class="label">จำนวนครั้ง</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tt-card">
+      <h2 style="font-size:0.9rem;margin-bottom:0.75rem">ค่าใช้จ่ายรายเดือน</h2>
+      <div class="tt-chart-wrap"><canvas id="bar-chart"></canvas></div>
+    </div>
+
+    <div class="tt-card">
+      <h2 style="font-size:0.9rem;margin-bottom:0.75rem">อัตราสิ้นเปลืองแต่ละครั้ง</h2>
+      <div class="tt-chart-wrap"><canvas id="line-chart"></canvas></div>
+    </div>
+  </main>
+
+  <script src="../shared/config.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="../shared/ui.js"></script>
+  <script src="../shared/liff.js"></script>
+  <script>
+    let barChart = null;
+    let lineChart = null;
+
+    async function loadVehicles() {
+      const vehicles = await TemThangApi.getVehicles();
+      const select = document.getElementById("vehicle_id");
+      vehicles.forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = v.vehicle_id;
+        opt.textContent = v.name;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderDashboard(data) {
+      document.getElementById("total-spend").textContent =
+        data.total_spend?.toLocaleString("th-TH", { maximumFractionDigits: 0 }) || "0";
+      document.getElementById("avg-monthly").textContent =
+        data.avg_monthly?.toLocaleString("th-TH", { maximumFractionDigits: 0 }) || "0";
+      document.getElementById("avg-efficiency").textContent =
+        data.avg_efficiency ? `${data.avg_efficiency.toFixed(2)} ${data.efficiency_unit || ""}` : "-";
+      document.getElementById("total-logs").textContent = data.total_logs || "0";
+
+      if (barChart) barChart.destroy();
+      barChart = new Chart(document.getElementById("bar-chart"), {
+        type: "bar",
+        data: {
+          labels: data.monthly_labels || [],
+          datasets: [{
+            label: "ค่าใช้จ่าย (บาท)",
+            data: data.monthly_spend || [],
+            backgroundColor: "#06c755",
+          }],
+        },
+        options: { responsive: true, maintainAspectRatio: false },
+      });
+
+      if (lineChart) lineChart.destroy();
+      lineChart = new Chart(document.getElementById("line-chart"), {
+        type: "line",
+        data: {
+          labels: data.efficiency_labels || [],
+          datasets: [{
+            label: data.efficiency_unit || "km/L",
+            data: data.efficiency_values || [],
+            borderColor: "#06c755",
+            tension: 0.3,
+          }],
+        },
+        options: { responsive: true, maintainAspectRatio: false },
+      });
+    }
+
+    async function refreshDashboard() {
+      const vehicleId = document.getElementById("vehicle_id").value || undefined;
+      const data = await TemThangApi.getDashboard(vehicleId);
+      renderDashboard(data);
+    }
+
+    document.getElementById("vehicle_id").addEventListener("change", async () => {
+      try {
+        TemThangUI.showLoading();
+        await refreshDashboard();
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    });
+
+    (async () => {
+      try {
+        TemThangUI.showLoading();
+        const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.dashboard);
+        if (!profile) return;
+        document.getElementById("user-name").textContent = profile.displayName;
+        await loadVehicles();
+        await refreshDashboard();
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    })();
+  </script>
+</body>
+</html>

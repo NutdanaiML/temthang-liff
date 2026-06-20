@@ -1,16 +1,15 @@
 /**
- * TemThang API wrapper — เรียกผ่าน Cloudflare Worker /api (CORS enabled)
+ * TemThang API wrapper
+ * ส่ง LINE access_token ทุก request — ห้ามส่ง line_user_id เอง (server verify ผ่าน LINE API)
  */
 const TemThangApi = (() => {
-  let lineUserId = null;
-
-  function setLineUserId(id) {
-    lineUserId = id;
-  }
-
-  function getLineUserId() {
-    if (!lineUserId) throw new Error("Unauthorized");
-    return lineUserId;
+  function getAccessToken() {
+    if (typeof liff === "undefined" || !liff.isLoggedIn()) {
+      throw new Error("Unauthorized");
+    }
+    const token = liff.getAccessToken();
+    if (!token) throw new Error("Unauthorized");
+    return token;
   }
 
   async function parseResponse(res) {
@@ -22,7 +21,7 @@ const TemThangApi = (() => {
   async function request(action, params = {}) {
     const url = new URL(TEMTHANG_CONFIG.GAS_ENDPOINT);
     url.searchParams.set("action", action);
-    url.searchParams.set("line_user_id", getLineUserId());
+    url.searchParams.set("access_token", getAccessToken());
 
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
@@ -37,7 +36,7 @@ const TemThangApi = (() => {
   async function post(action, body = {}) {
     const params = new URLSearchParams();
     params.set("action", action);
-    params.set("line_user_id", getLineUserId());
+    params.set("access_token", getAccessToken());
 
     Object.entries(body).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
@@ -54,8 +53,6 @@ const TemThangApi = (() => {
   }
 
   return {
-    setLineUserId,
-    getLineUserId,
     getProfile: () => request("getProfile"),
     getVehicles: () => request("getVehicles"),
     getFuelTypes: () => request("getFuelTypes"),

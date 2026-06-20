@@ -14,15 +14,12 @@ const TemThangLiff = (() => {
       return null;
     }
 
-    const profile = await liff.getProfile();
-    TemThangApi.setLineUserId(profile.userId);
-
-    try {
-      await TemThangApi.getProfile();
-    } catch (err) {
-      throw new Error(`เชื่อมต่อ API ไม่ได้: ${err.message}`);
+    if (!liff.getAccessToken()) {
+      throw new Error("ไม่พบ LINE access token");
     }
 
+    const profile = await liff.getProfile();
+    await TemThangApi.getProfile();
     return profile;
   }
 

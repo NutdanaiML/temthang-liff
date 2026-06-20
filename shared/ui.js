@@ -11,12 +11,12 @@ const TemThangUI = (() => {
       document.body.appendChild(el);
     }
     el.innerHTML = `<div class="tt-spinner"></div><p>${message}</p>`;
-    el.hidden = false;
+    el.classList.add("is-visible");
   }
 
   function hideLoading() {
     const el = document.getElementById("tt-loading");
-    if (el) el.hidden = true;
+    if (el) el.classList.remove("is-visible");
   }
 
   function showError(message) {
@@ -78,11 +78,26 @@ const TemThangUI = (() => {
     });
   }
 
+  function showFatal(message) {
+    hideLoading();
+    let el = document.getElementById("tt-fatal");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "tt-fatal";
+      el.className = "tt-card";
+      el.style.margin = "1rem";
+      el.style.color = "var(--tt-error)";
+      document.querySelector(".tt-main")?.prepend(el);
+    }
+    el.textContent = message;
+  }
+
   return {
     showLoading,
     hideLoading,
     showError,
     showSuccess,
+    showFatal,
     bindSubmitButton,
     renderFieldErrors,
   };

@@ -1,25 +1,27 @@
 /**
- * TemThang API wrapper — ส่ง id_token/access_token ผ่าน POST เท่านั้น
+ * TemThang API wrapper — ส่ง id_token/access_token ผ่าน POST
  */
 const TemThangApi = (() => {
+  const TIMEOUT_MS = 20000;
+
   function appendAuth_(params) {
     if (typeof liff === "undefined" || !liff.isLoggedIn()) {
       throw new Error("กรุณาเปิดจาก LINE");
     }
 
-    const accessToken = liff.getAccessToken();
     const idToken = liff.getIDToken();
+    const accessToken = liff.getAccessToken();
 
-    if (accessToken) {
-      params.set("access_token", accessToken);
-      return;
-    }
     if (idToken) {
       params.set("id_token", idToken);
       return;
     }
+    if (accessToken) {
+      params.set("access_token", accessToken);
+      return;
+    }
 
-    throw new Error("กรุณาเพิ่ม scope openid ใน LIFF App (LINE Developers Console)");
+    throw new Error("กรุณาเพิ่ม scope openid ใน LIFF App");
   }
 
   async function call(action, data = {}) {
@@ -33,14 +35,34 @@ const TemThangApi = (() => {
       }
     });
 
-    const res = await fetch(TEMTHANG_CONFIG.GAS_ENDPOINT, {
-      method: "POST",
-      body: params,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || "เกิดข้อผิดพลาด");
-    return json.data;
+    try {
+      const res = await fetch(TEMTHANG_CONFIG.GAS_ENDPOINT, {
+        method: "POST",
+        body: params,
+        signal: controller.signal,
+      });
+
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (err) {
+        throw new Error("Server ตอบกลับไม่ถูกต้อง");
+      }
+
+      if (!json.success) throw new Error(json.error || "เกิดข้อผิดพลาด");
+      return json.data;
+    } catch (err) {
+      if (err.name === "AbortError") {
+        throw new Error("เชื่อมต่อ server ไม่สำเร็จ (timeout)");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   return {

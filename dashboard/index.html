@@ -56,13 +56,33 @@
     </div>
   </main>
 
-  <script src="../shared/config.js"></script>
-  <script src="../shared/api.js"></script>
-  <script src="../shared/ui.js"></script>
-  <script src="../shared/liff.js"></script>
+  <script src="../shared/config.js?v=3"></script>
+  <script src="../shared/api.js?v=3"></script>
+  <script src="../shared/ui.js?v=3"></script>
+  <script src="../shared/liff.js?v=3"></script>
   <script>
     let barChart = null;
     let lineChart = null;
+
+    async function boot() {
+      try {
+        TemThangUI.showLoading();
+        const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.dashboard);
+        if (!profile) {
+          document.getElementById("user-name").textContent = "กำลังเข้าสู่ระบบ...";
+          return;
+        }
+        document.getElementById("user-name").textContent = profile.displayName;
+        await TemThangApi.getProfile();
+        await loadVehicles();
+        await refreshDashboard();
+      } catch (e) {
+        document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";
+        TemThangUI.showFatal(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    }
 
     async function loadVehicles() {
       const vehicles = await TemThangApi.getVehicles();
@@ -131,20 +151,7 @@
       }
     });
 
-    (async () => {
-      try {
-        TemThangUI.showLoading();
-        const profile = await TemThangLiff.init(TEMTHANG_CONFIG.LIFF_IDS.dashboard);
-        if (!profile) return;
-        document.getElementById("user-name").textContent = profile.displayName;
-        await loadVehicles();
-        await refreshDashboard();
-      } catch (e) {
-        TemThangUI.showError(e.message);
-      } finally {
-        TemThangUI.hideLoading();
-      }
-    })();
+    boot();
   </script>
 </body>
 </html>

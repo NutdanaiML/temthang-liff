@@ -2,6 +2,12 @@
  * TemThang LIFF bootstrap
  */
 const TemThangLiff = (() => {
+  function ensureAuthTokens_() {
+    if (!liff.getIDToken() && !liff.getAccessToken()) {
+      throw new Error("กรุณาเพิ่ม scope openid ใน LIFF App แล้วปิดเปิดใหม่");
+    }
+  }
+
   async function init(liffId) {
     if (!liffId || liffId.startsWith("YOUR_")) {
       throw new Error("กรุณาตั้งค่า LIFF ID ใน shared/config.js");
@@ -14,13 +20,8 @@ const TemThangLiff = (() => {
       return null;
     }
 
-    if (!liff.getAccessToken()) {
-      throw new Error("ไม่พบ LINE access token");
-    }
-
-    const profile = await liff.getProfile();
-    await TemThangApi.getProfile();
-    return profile;
+    ensureAuthTokens_();
+    return liff.getProfile();
   }
 
   function close() {

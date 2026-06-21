@@ -37,6 +37,16 @@
       </div>
     </div>
 
+    <div class="tt-actions-row">
+      <button type="button" class="tt-btn tt-btn--ghost" id="export-csv">📥 Export CSV</button>
+    </div>
+
+    <div class="tt-card" style="box-shadow:none;background:transparent;padding:0">
+      <div class="tt-chart-title">ประวัติการเติม <span style="font-weight:400;color:var(--tt-muted)">· แตะเพื่อแก้ไข</span></div>
+      <ul class="tt-tx-list" id="log-list"></ul>
+      <div class="tt-empty" id="log-empty" hidden>ยังไม่มีรายการ</div>
+    </div>
+
     <div class="tt-card">
       <div class="tt-chart-title">ค่าใช้จ่ายรายเดือน</div>
       <div class="tt-chart-wrap"><canvas id="bar-chart"></canvas></div>
@@ -46,22 +56,23 @@
       <div class="tt-chart-title">อัตราสิ้นเปลืองแต่ละครั้ง</div>
       <div class="tt-chart-wrap"><canvas id="line-chart"></canvas></div>
     </div>
+
+    <button type="button" class="tt-footer-link" id="delete-account">ลบบัญชีของฉัน</button>
   </main>
 
-  <select id="vehicle_id" hidden aria-hidden="true">
-    <option value="">ทุกคัน</option>
-  </select>
-
-  <script src="../shared/config.js?v=5"></script>
-  <script src="../shared/api.js?v=5"></script>
-  <script src="../shared/ui.js?v=5"></script>
-  <script src="../shared/liff.js?v=5"></script>
+  <script src="../shared/config.js?v=7"></script>
+  <script src="../shared/api.js?v=7"></script>
+  <script src="../shared/validate.js?v=7"></script>
+  <script src="../shared/ui.js?v=7"></script>
+  <script src="../shared/liff.js?v=7"></script>
+  <script src="../shared/nav.js?v=7"></script>
   <script>
     let barChart = null;
     let lineChart = null;
     let vehicles = [];
     let selectedVehicleId = "";
     let chartCategory = "LIQUID";
+    let recentLogs = [];
 
     async function boot() {
       try {
@@ -77,8 +88,8 @@
         TemThangUI.showLoading("กำลังโหลดรายงาน...");
         vehicles = await TemThangApi.getVehicles();
         populateVehicles(vehicles);
-        const dashboardData = await TemThangApi.getDashboard();
-        renderDashboard(dashboardData);
+        await refreshDashboard();
+        TemThangNav.mount("dashboard");
       } catch (e) {
         document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";
         TemThangUI.showFatal(e.message);
@@ -88,12 +99,12 @@
     }
 
     function populateVehicles(list) {
-      const select = document.getElementById("vehicle_id");
+      const select = document.createElement("select");
+      select.hidden = true;
       list.forEach((v) => {
         const opt = document.createElement("option");
         opt.value = v.vehicle_id;
         opt.textContent = v.name;
-        opt.dataset.category = v.fuel_category;
         select.appendChild(opt);
       });
     }
@@ -112,16 +123,92 @@
       return `${price} ฿ · ${date}`;
     }
 
+    const TX_ICON = { LIQUID: "⛽", ELECTRIC: "⚡", GAS: "🔵" };
+
+    function renderLogList(logs) {
+      const list = document.getElementById("log-list");
+      const empty = document.getElementById("log-empty");
+      if (!logs.length) {
+        list.innerHTML = "";
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+      list.innerHTML = logs.map((log) => {
+        const cat = log.fuel_category || "LIQUID";
+        const price = (log.total_price || 0).toLocaleString("th-TH", { maximumFractionDigits: 0 });
+        const title = log.station || "เติมน้ำมัน / ชาร์จ";
+        const meta = `${log.date || "-"} · ${log.quantity || ""} ${log.quantity_unit || ""} · ${log.odometer?.toLocaleString("th-TH") || "-"} km`;
+        return `
+          <li>
+            <button type="button" class="tt-tx-card" data-log-id="${log.log_id}">
+              <div class="tt-tx-card__icon tt-tx-card__icon--${cat}">${TX_ICON[cat] || "⛽"}</div>
+              <div class="tt-tx-card__body">
+                <div class="tt-tx-card__title">${title}</div>
+                <div class="tt-tx-card__meta">${meta}</div>
+              </div>
+              <span class="tt-tx-card__amount">${price} ฿</span>
+            </button>
+          </li>
+        `;
+      }).join("");
+
+      list.querySelectorAll(".tt-tx-card").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const log = recentLogs.find((l) => l.log_id === btn.dataset.logId);
+          if (log) openEditLog(log);
+        });
+      });
+    }
+
+    async function openEditLog(log) {
+      TemThangUI.showLoading();
+      try {
+        const vehicleLogs = await TemThangApi.getLogs(log.vehicle_id);
+        const sorted = vehicleLogs.slice().sort((a, b) => {
+          if (a.date !== b.date) return String(a.date).localeCompare(String(b.date));
+          return (a.odometer || 0) - (b.odometer || 0);
+        });
+        const idx = sorted.findIndex((l) => l.log_id === log.log_id);
+        const prev = idx > 0 ? sorted[idx - 1] : null;
+        const next = idx < sorted.length - 1 ? sorted[idx + 1] : null;
+
+        TemThangUI.openLogEditSheet(log, {
+          prevOdometer: prev ? prev.odometer : null,
+          nextOdometer: next ? next.odometer : null,
+        }, {
+          onSave: async (payload) => {
+            TemThangUI.showLoading("กำลังบันทึก...");
+            await TemThangApi.updateLog(payload);
+            await refreshDashboard();
+            TemThangUI.showSuccess("บันทึกแล้ว");
+          },
+          onDelete: async (logId) => {
+            TemThangUI.showLoading("กำลังลบ...");
+            await TemThangApi.deleteLog(logId);
+            await refreshDashboard();
+            TemThangUI.showSuccess("ลบแล้ว");
+          },
+        });
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    }
+
     function renderDashboard(data) {
-      document.getElementById("month-label").textContent =
-        formatMonthLabel(data.current_month);
+      recentLogs = data.recent_logs || [];
+      renderLogList(recentLogs);
+
+      document.getElementById("month-label").textContent = formatMonthLabel(data.current_month);
       document.getElementById("month-spend").textContent =
         (data.month_spend ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 0 }) + " ฿";
       document.getElementById("avg-efficiency").textContent =
         data.avg_efficiency ? `${data.avg_efficiency.toFixed(2)} ${data.efficiency_unit || ""}` : "-";
       document.getElementById("last-refuel").textContent = formatLastRefuel(data.last_refuel);
 
-      const color = TemThangUI.getChartColor(chartCategory);
+      const color = TemThangUI.getChartColor(chartCategory) || "#1a4f8b";
 
       if (barChart) barChart.destroy();
       barChart = new Chart(document.getElementById("bar-chart"), {
@@ -181,13 +268,10 @@
       ];
       TemThangUI.openBottomSheet("เลือกรถ", options, selectedVehicleId, async (value, opt) => {
         selectedVehicleId = value;
-        document.getElementById("vehicle_id").value = value;
         document.getElementById("filter-label").textContent = opt.label;
-
         const vehicle = vehicles.find((v) => v.vehicle_id === value);
         chartCategory = vehicle?.fuel_category || "LIQUID";
         TemThangUI.setFuelTheme(chartCategory);
-
         try {
           TemThangUI.showLoading("กำลังโหลด...");
           await refreshDashboard();
@@ -197,6 +281,38 @@
           TemThangUI.hideLoading();
         }
       });
+    });
+
+    document.getElementById("export-csv").addEventListener("click", async () => {
+      try {
+        TemThangUI.showLoading("กำลังสร้างไฟล์...");
+        const result = await TemThangApi.exportCsv(selectedVehicleId || undefined);
+        const blob = new Blob(["\uFEFF" + result.csv], { type: "text/csv;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = result.filename || "temthang-logs.csv";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        TemThangUI.showSuccess("ดาวน์โหลดแล้ว");
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
+    });
+
+    document.getElementById("delete-account").addEventListener("click", async () => {
+      if (!confirm("ลบบัญชีและข้อมูลทั้งหมดของคุณ?\nการกระทำนี้ไม่สามารถกู้คืนได้")) return;
+      try {
+        TemThangUI.showLoading("กำลังลบบัญชี...");
+        await TemThangApi.deleteAccount();
+        await TemThangUI.showSuccessCheckmark("ลบบัญชีแล้ว");
+        TemThangLiff.close();
+      } catch (e) {
+        TemThangUI.showError(e.message);
+      } finally {
+        TemThangUI.hideLoading();
+      }
     });
 
     boot();

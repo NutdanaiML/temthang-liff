@@ -88,6 +88,10 @@ const TemThangApi = (() => {
     getLogs: (vehicleId) => call("getLogs", { vehicle_id: vehicleId }),
     getDashboard: (vehicleId) => call("getDashboard", { vehicle_id: vehicleId }),
     saveLog: (payload) => call("saveLog", payload),
+    updateLog: (payload) => call("updateLog", payload),
+    deleteLog: (logId) => call("deleteLog", { log_id: logId }),
+    exportCsv: (vehicleId) => call("exportCsv", vehicleId ? { vehicle_id: vehicleId } : {}),
+    deleteAccount: () => call("deleteAccount"),
     saveVehicle: (payload) => call("saveVehicle", payload),
     deleteVehicle: (vehicleId) => call("deleteVehicle", { vehicle_id: vehicleId }),
   };

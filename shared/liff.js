@@ -28,5 +28,16 @@ const TemThangLiff = (() => {
     if (liff.isInClient()) liff.closeWindow();
   }
 
-  return { init, close };
+  function openApp(appKey) {
+    const liffId = TEMTHANG_CONFIG.LIFF_IDS[appKey];
+    if (!liffId) return;
+    const liffUrl = "https://liff.line.me/" + liffId;
+    if (liff.isInClient()) {
+      liff.openWindow({ url: liffUrl, external: false });
+    } else {
+      window.location.href = TEMTHANG_CONFIG.PAGES_BASE + "/" + appKey + "/";
+    }
+  }
+
+  return { init, close, openApp };
 })();

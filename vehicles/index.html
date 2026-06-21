@@ -44,11 +44,12 @@
     </form>
   </main>
 
-  <script src="../shared/config.js?v=5"></script>
-  <script src="../shared/api.js?v=5"></script>
-  <script src="../shared/validate.js?v=5"></script>
-  <script src="../shared/ui.js?v=5"></script>
-  <script src="../shared/liff.js?v=5"></script>
+  <script src="../shared/config.js?v=7"></script>
+  <script src="../shared/api.js?v=7"></script>
+  <script src="../shared/validate.js?v=7"></script>
+  <script src="../shared/ui.js?v=7"></script>
+  <script src="../shared/liff.js?v=7"></script>
+  <script src="../shared/nav.js?v=7"></script>
   <script>
     let fuelTypes = [];
 
@@ -70,6 +71,7 @@
         ]);
         populateFuelTypes(types);
         renderVehicles(vehicles);
+        TemThangNav.mount("vehicles");
       } catch (e) {
         document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";
         TemThangUI.showFatal(e.message);

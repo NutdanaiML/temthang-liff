@@ -72,8 +72,34 @@ const TemThangValidate = (() => {
     return { valid: Object.keys(errors).length === 0, errors };
   }
 
+  function validateLogUpdateForm(data, prevOdometer, nextOdometer) {
+    const errors = {};
+    const cur = Number(data.odometer);
+
+    if (prevOdometer != null && cur <= prevOdometer) {
+      errors.odometer = "เลขไมล์ต้องมากกว่าครั้งก่อนหน้า";
+    } else if (nextOdometer != null && cur >= nextOdometer) {
+      errors.odometer = "เลขไมล์ต้องน้อยกว่าครั้งถัดไป";
+    } else {
+      const odometerErr = validateOdometer(data.odometer, prevOdometer);
+      if (odometerErr) errors.odometer = odometerErr;
+    }
+
+    const quantityErr = validateQuantity(data.quantity, data.fuel_category);
+    if (quantityErr) errors.quantity = quantityErr;
+
+    const priceErr = validatePricePerUnit(data.price_per_unit, data.fuel_category);
+    if (priceErr) errors.price_per_unit = priceErr;
+
+    const totalErr = validateTotalPrice(data.total_price);
+    if (totalErr) errors.total_price = totalErr;
+
+    return { valid: Object.keys(errors).length === 0, errors };
+  }
+
   return {
     validateRefuelForm,
+    validateLogUpdateForm,
     validateVehicleForm,
     validateOdometer,
     validateQuantity,

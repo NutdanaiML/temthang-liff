@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>รายงาน — น้องเต็มถัง</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -15,54 +15,53 @@
   </header>
 
   <main class="tt-main">
-    <div class="tt-card">
-      <div class="tt-form-group">
-        <label for="vehicle_id">เลือกรถ</label>
-        <select id="vehicle_id">
-          <option value="">-- ทุกคัน --</option>
-        </select>
-      </div>
-    </div>
+    <button type="button" class="tt-filter-btn" id="vehicle-filter" aria-haspopup="listbox">
+      <span id="filter-label">ทุกคัน</span>
+      <span>เปลี่ยน ▾</span>
+    </button>
 
-    <div class="tt-card">
-      <div class="tt-scorecard" id="scorecards">
-        <div class="tt-scorecard-item">
-          <div class="value" id="total-spend">-</div>
-          <div class="label">ยอดรวมทั้งหมด (บาท)</div>
-        </div>
-        <div class="tt-scorecard-item">
-          <div class="value" id="avg-monthly">-</div>
-          <div class="label">เฉลี่ย/เดือน (บาท)</div>
-        </div>
-        <div class="tt-scorecard-item">
+    <div class="tt-kpi-row" id="kpi-section">
+      <div class="tt-kpi-hero">
+        <div class="label" id="month-label">ใช้จ่ายเดือนนี้</div>
+        <div class="value" id="month-spend">-</div>
+      </div>
+      <div class="tt-kpi-grid">
+        <div class="tt-kpi-item">
           <div class="value" id="avg-efficiency">-</div>
           <div class="label">อัตราสิ้นเปลืองเฉลี่ย</div>
         </div>
-        <div class="tt-scorecard-item">
-          <div class="value" id="total-logs">-</div>
-          <div class="label">จำนวนครั้ง</div>
+        <div class="tt-kpi-item">
+          <div class="value" id="last-refuel" style="font-size:0.95rem">-</div>
+          <div class="label">เติมล่าสุด</div>
         </div>
       </div>
     </div>
 
     <div class="tt-card">
-      <h2 style="font-size:0.9rem;margin-bottom:0.75rem">ค่าใช้จ่ายรายเดือน</h2>
+      <div class="tt-chart-title">ค่าใช้จ่ายรายเดือน</div>
       <div class="tt-chart-wrap"><canvas id="bar-chart"></canvas></div>
     </div>
 
     <div class="tt-card">
-      <h2 style="font-size:0.9rem;margin-bottom:0.75rem">อัตราสิ้นเปลืองแต่ละครั้ง</h2>
+      <div class="tt-chart-title">อัตราสิ้นเปลืองแต่ละครั้ง</div>
       <div class="tt-chart-wrap"><canvas id="line-chart"></canvas></div>
     </div>
   </main>
 
-  <script src="../shared/config.js?v=4"></script>
-  <script src="../shared/api.js?v=4"></script>
-  <script src="../shared/ui.js?v=4"></script>
-  <script src="../shared/liff.js?v=4"></script>
+  <select id="vehicle_id" hidden aria-hidden="true">
+    <option value="">ทุกคัน</option>
+  </select>
+
+  <script src="../shared/config.js?v=5"></script>
+  <script src="../shared/api.js?v=5"></script>
+  <script src="../shared/ui.js?v=5"></script>
+  <script src="../shared/liff.js?v=5"></script>
   <script>
     let barChart = null;
     let lineChart = null;
+    let vehicles = [];
+    let selectedVehicleId = "";
+    let chartCategory = "LIQUID";
 
     async function boot() {
       try {
@@ -76,11 +75,9 @@
         TemThangUI.hideLoading();
 
         TemThangUI.showLoading("กำลังโหลดรายงาน...");
-        const [vehicles, dashboardData] = await Promise.all([
-          TemThangApi.getVehicles(),
-          TemThangApi.getDashboard(),
-        ]);
+        vehicles = await TemThangApi.getVehicles();
         populateVehicles(vehicles);
+        const dashboardData = await TemThangApi.getDashboard();
         renderDashboard(dashboardData);
       } catch (e) {
         document.getElementById("user-name").textContent = "โหลดไม่สำเร็จ";
@@ -90,28 +87,41 @@
       }
     }
 
-    function populateVehicles(vehicles) {
+    function populateVehicles(list) {
       const select = document.getElementById("vehicle_id");
-      vehicles.forEach((v) => {
+      list.forEach((v) => {
         const opt = document.createElement("option");
         opt.value = v.vehicle_id;
         opt.textContent = v.name;
+        opt.dataset.category = v.fuel_category;
         select.appendChild(opt);
       });
     }
 
-    async function loadVehicles() {
-      populateVehicles(await TemThangApi.getVehicles());
+    function formatMonthLabel(ym) {
+      if (!ym) return "เดือนนี้";
+      const [y, m] = ym.split("-");
+      const months = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+      return `ใช้จ่าย ${months[Number(m)] || m} ${String(Number(y) + 543).slice(-2)}`;
+    }
+
+    function formatLastRefuel(last) {
+      if (!last) return "ยังไม่มี";
+      const price = last.total_price?.toLocaleString("th-TH", { maximumFractionDigits: 0 }) || "0";
+      const date = last.date ? last.date.split("-").reverse().join("/") : "";
+      return `${price} ฿ · ${date}`;
     }
 
     function renderDashboard(data) {
-      document.getElementById("total-spend").textContent =
-        data.total_spend?.toLocaleString("th-TH", { maximumFractionDigits: 0 }) || "0";
-      document.getElementById("avg-monthly").textContent =
-        data.avg_monthly?.toLocaleString("th-TH", { maximumFractionDigits: 0 }) || "0";
+      document.getElementById("month-label").textContent =
+        formatMonthLabel(data.current_month);
+      document.getElementById("month-spend").textContent =
+        (data.month_spend ?? 0).toLocaleString("th-TH", { maximumFractionDigits: 0 }) + " ฿";
       document.getElementById("avg-efficiency").textContent =
         data.avg_efficiency ? `${data.avg_efficiency.toFixed(2)} ${data.efficiency_unit || ""}` : "-";
-      document.getElementById("total-logs").textContent = data.total_logs || "0";
+      document.getElementById("last-refuel").textContent = formatLastRefuel(data.last_refuel);
+
+      const color = TemThangUI.getChartColor(chartCategory);
 
       if (barChart) barChart.destroy();
       barChart = new Chart(document.getElementById("bar-chart"), {
@@ -121,10 +131,19 @@
           datasets: [{
             label: "ค่าใช้จ่าย (บาท)",
             data: data.monthly_spend || [],
-            backgroundColor: "#06c755",
+            backgroundColor: color,
+            borderRadius: 6,
           }],
         },
-        options: { responsive: true, maintainAspectRatio: false },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { ticks: { font: { family: "Prompt" } } },
+            x: { ticks: { font: { family: "Prompt" }, maxRotation: 45 } },
+          },
+        },
       });
 
       if (lineChart) lineChart.destroy();
@@ -135,29 +154,49 @@
           datasets: [{
             label: data.efficiency_unit || "km/L",
             data: data.efficiency_values || [],
-            borderColor: "#06c755",
+            borderColor: color,
+            backgroundColor: color + "22",
+            fill: true,
             tension: 0.3,
+            pointRadius: 3,
           }],
         },
-        options: { responsive: true, maintainAspectRatio: false },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+        },
       });
     }
 
     async function refreshDashboard() {
-      const vehicleId = document.getElementById("vehicle_id").value || undefined;
-      const data = await TemThangApi.getDashboard(vehicleId);
+      const data = await TemThangApi.getDashboard(selectedVehicleId || undefined);
       renderDashboard(data);
     }
 
-    document.getElementById("vehicle_id").addEventListener("change", async () => {
-      try {
-        TemThangUI.showLoading();
-        await refreshDashboard();
-      } catch (e) {
-        TemThangUI.showError(e.message);
-      } finally {
-        TemThangUI.hideLoading();
-      }
+    document.getElementById("vehicle-filter").addEventListener("click", () => {
+      const options = [
+        { value: "", label: "ทุกคัน" },
+        ...vehicles.map((v) => ({ value: v.vehicle_id, label: v.name })),
+      ];
+      TemThangUI.openBottomSheet("เลือกรถ", options, selectedVehicleId, async (value, opt) => {
+        selectedVehicleId = value;
+        document.getElementById("vehicle_id").value = value;
+        document.getElementById("filter-label").textContent = opt.label;
+
+        const vehicle = vehicles.find((v) => v.vehicle_id === value);
+        chartCategory = vehicle?.fuel_category || "LIQUID";
+        TemThangUI.setFuelTheme(chartCategory);
+
+        try {
+          TemThangUI.showLoading("กำลังโหลด...");
+          await refreshDashboard();
+        } catch (e) {
+          TemThangUI.showError(e.message);
+        } finally {
+          TemThangUI.hideLoading();
+        }
+      });
     });
 
     boot();

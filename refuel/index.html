@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>บันทึกเติมน้ำมัน — น้องเต็มถัง</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -14,7 +14,7 @@
   </header>
 
   <main class="tt-main">
-    <form id="refuel-form" class="tt-card">
+    <form id="refuel-form" class="tt-card tt-card--fuel" data-category="LIQUID">
       <div class="tt-form-group">
         <label for="vehicle_id">เลือกรถ</label>
         <select id="vehicle_id" name="vehicle_id" required>
@@ -24,56 +24,60 @@
       </div>
 
       <div class="tt-form-group">
-        <label for="date">วันที่เติม</label>
-        <input type="date" id="date" name="date" required>
-      </div>
-
-      <div class="tt-form-group">
-        <label for="station">ปั๊ม / สถานีชาร์จ</label>
-        <input type="text" id="station" name="station" placeholder="เช่น ปตท. สุขุมวิท">
-      </div>
-
-      <div class="tt-form-group">
         <label for="odometer">เลขไมล์ (km)</label>
-        <input type="number" id="odometer" name="odometer" min="0" step="1" required>
+        <input type="number" id="odometer" name="odometer" inputmode="numeric" min="0" step="1" required placeholder="เช่น 46850">
         <div class="tt-field-error" data-error="odometer" hidden></div>
       </div>
 
       <div class="tt-form-group">
         <label for="quantity" id="quantity-label">จำนวน (ลิตร)</label>
-        <input type="number" id="quantity" name="quantity" min="0" step="0.01" required>
+        <input type="number" id="quantity" name="quantity" inputmode="decimal" min="0" step="0.01" required placeholder="0.00">
         <div class="tt-field-error" data-error="quantity" hidden></div>
       </div>
 
       <div class="tt-form-group">
         <label for="price_per_unit" id="price-label">ราคาต่อลิตร (บาท)</label>
-        <input type="number" id="price_per_unit" name="price_per_unit" min="0" step="0.01" required>
+        <input type="number" id="price_per_unit" name="price_per_unit" inputmode="decimal" min="0" step="0.01" required placeholder="0.00">
         <div class="tt-field-error" data-error="price_per_unit" hidden></div>
       </div>
 
       <div class="tt-form-group">
         <label for="total_price">ยอดรวม (บาท)</label>
-        <input type="number" id="total_price" name="total_price" min="0" step="0.01" required>
+        <input type="number" id="total_price" name="total_price" inputmode="decimal" min="0" step="0.01" required placeholder="คำนวณอัตโนมัติ">
         <div class="tt-field-error" data-error="total_price" hidden></div>
       </div>
 
-      <div class="tt-form-group">
-        <label class="tt-checkbox">
-          <input type="checkbox" id="is_full_tank" name="is_full_tank" checked>
-          <span id="full-tank-label">เติมเต็มถัง</span>
-        </label>
-      </div>
+      <details class="tt-details">
+        <summary class="tt-details__summary">เพิ่มเติม (ไม่บังคับ)</summary>
+        <div class="tt-details__body">
+          <div class="tt-form-group">
+            <label for="date">วันที่เติม</label>
+            <input type="date" id="date" name="date" required>
+          </div>
+          <div class="tt-form-group">
+            <label for="station">ปั๊ม / สถานีชาร์จ</label>
+            <input type="text" id="station" name="station" placeholder="เช่น ปตท. สุขุมวิท" autocomplete="off">
+          </div>
+          <div class="tt-form-group" style="margin-bottom:0">
+            <label class="tt-checkbox">
+              <input type="checkbox" id="is_full_tank" name="is_full_tank" checked>
+              <span id="full-tank-label">เติมเต็มถัง</span>
+            </label>
+          </div>
+        </div>
+      </details>
 
       <button type="submit" class="tt-btn tt-btn--primary">บันทึก</button>
     </form>
   </main>
 
-  <script src="../shared/config.js?v=4"></script>
-  <script src="../shared/api.js?v=4"></script>
-  <script src="../shared/validate.js?v=4"></script>
-  <script src="../shared/ui.js?v=4"></script>
-  <script src="../shared/liff.js?v=4"></script>
+  <script src="../shared/config.js?v=5"></script>
+  <script src="../shared/api.js?v=5"></script>
+  <script src="../shared/validate.js?v=5"></script>
+  <script src="../shared/ui.js?v=5"></script>
+  <script src="../shared/liff.js?v=5"></script>
   <script>
+    const LAST_VEHICLE_KEY = "tt_last_vehicle_id";
     let vehicles = [];
     let previousOdometer = null;
     let currentCategory = "LIQUID";
@@ -100,6 +104,15 @@
       }
     }
 
+    function applyVehicleSelection(vehicleId) {
+      const select = document.getElementById("vehicle_id");
+      select.value = vehicleId || "";
+      const opt = select.selectedOptions[0];
+      if (!opt?.dataset.category) return;
+      updateLabels(opt.dataset.category);
+      previousOdometer = opt.dataset.odometer ? Number(opt.dataset.odometer) : null;
+    }
+
     async function loadVehicles() {
       vehicles = await TemThangApi.getVehicles();
       const select = document.getElementById("vehicle_id");
@@ -112,10 +125,19 @@
         opt.dataset.odometer = v.odometer_latest || "";
         select.appendChild(opt);
       });
+
+      const lastId = localStorage.getItem(LAST_VEHICLE_KEY);
+      const defaultId = lastId && vehicles.some((v) => v.vehicle_id === lastId)
+        ? lastId
+        : vehicles[0]?.vehicle_id;
+      if (defaultId) applyVehicleSelection(defaultId);
     }
 
     function updateLabels(category) {
       currentCategory = category;
+      TemThangUI.setFuelTheme(category);
+      document.getElementById("refuel-form").dataset.category = category;
+
       const units = { LIQUID: "ลิตร", GAS: "กก.", ELECTRIC: "kWh" };
       const unit = units[category] || "ลิตร";
       document.getElementById("quantity-label").textContent = `จำนวน (${unit})`;
@@ -125,10 +147,7 @@
     }
 
     document.getElementById("vehicle_id").addEventListener("change", (e) => {
-      const opt = e.target.selectedOptions[0];
-      if (!opt?.dataset.category) return;
-      updateLabels(opt.dataset.category);
-      previousOdometer = opt.dataset.odometer ? Number(opt.dataset.odometer) : null;
+      applyVehicleSelection(e.target.value);
     });
 
     document.getElementById("quantity").addEventListener("input", calcTotal);
@@ -166,8 +185,10 @@
       }
 
       await TemThangApi.saveLog(payload);
-      TemThangUI.showSuccess("บันทึกสำเร็จ ✅");
-      setTimeout(() => TemThangLiff.close(), 1500);
+      localStorage.setItem(LAST_VEHICLE_KEY, vehicleId);
+      await TemThangUI.showSuccessCheckmark("บันทึกสำเร็จ");
+      TemThangLiff.close();
+      return { keepDisabled: true };
     });
 
     boot();

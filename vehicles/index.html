@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>จัดการรถ — น้องเต็มถัง</title>
   <link rel="stylesheet" href="../shared/styles.css">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -44,11 +44,11 @@
     </form>
   </main>
 
-  <script src="../shared/config.js?v=4"></script>
-  <script src="../shared/api.js?v=4"></script>
-  <script src="../shared/validate.js?v=4"></script>
-  <script src="../shared/ui.js?v=4"></script>
-  <script src="../shared/liff.js?v=4"></script>
+  <script src="../shared/config.js?v=5"></script>
+  <script src="../shared/api.js?v=5"></script>
+  <script src="../shared/validate.js?v=5"></script>
+  <script src="../shared/ui.js?v=5"></script>
+  <script src="../shared/liff.js?v=5"></script>
   <script>
     let fuelTypes = [];
 
@@ -105,7 +105,8 @@
         <div class="tt-vehicle-item" data-id="${v.vehicle_id}">
           <div>
             <div class="name">${v.name}</div>
-            <div class="plate">${v.license_plate || "ไม่มีทะเบียน"} · ${v.fuel_type}</div>
+            <div class="plate">${v.license_plate || "ไม่มีทะเบียน"}</div>
+            <span class="tt-fuel-badge tt-fuel-badge--${v.fuel_category || "LIQUID"}">${v.fuel_type}</span>
           </div>
           <button class="tt-btn tt-btn--sm tt-btn--danger" onclick="deleteVehicle('${v.vehicle_id}')">ลบ</button>
         </div>
